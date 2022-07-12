@@ -67,6 +67,29 @@ with the characteristic of being byzantine fault tolerant (BFT).
     as opposed to "failure detection and retry"-systems, 
     which would take additional computing time if a failure or wrong information occurs on one of the machines.
 
+- Consensus is the central principle 
+through which it is guaranteed,
+that all participating subsystems in a distributed system
+receive the exact same information/transactions 
+in the same order [[p.1, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
+
+- Classic SMR algorithms concerned themselves with
+a small amount of connected machines,
+that were often in the same network,
+and all participants could be trusted 
+[[p.1, BucKwoMil18]](https://arxiv.org/abs/1807.04938). 
+
+- Blockchains are networks 
+of hundreds or thounsands of nodes,
+which can be in arbitrary locations,
+and the participants do not know each other.
+Additionally, nodes are usually only
+connected to their peers, 
+which is a subset of the total system. 
+These peers communicate through a gossip protocol
+[[p.1, BucKwoMil18]](https://arxiv.org/abs/1807.04938). 
+
+
 ### Motivation behind Tendermint
 
 - Before Tendermint, all blockchains had to include 
@@ -88,6 +111,21 @@ because too many modules were interconnected
 only offer the base layers, 
 which are concerned with networking and consensus.
 
+## Predecessors of Tendermint
+
+- Direct predecessors of Tendermint are the PBFT and DLS algorithms.
+  
+  - Tendermint has three communication steps per round like PBFT
+  (proposal + two voting steps)
+  
+  - Tendermint uses different block proposers each round as in DLS
+
+[[p.2, BucKwoMil18]](https://arxiv.org/abs/1807.04938)
+
+- PBFT (Practical Byzantine Fault Tolerance) SMR [[p.X, ]](https://www.microsoft.com/en-us/research/wp-content/uploads/2017/01/p398-castro-bft-tocs.pdf)
+
+- DLS algorithm [[]](https://groups.csail.mit.edu/tds/papers/Lynch/jacm88.pdf)
+
 
 ## Byzantine Fault Tolerance
 
@@ -97,9 +135,16 @@ even if 1/3 of all participating subsystems
 are fraudulent or misbehaving in any other way 
 (e.g. being broken, failing to connect, ...).
 
+- BFT solves the Byzantine Generals Problem,
+which describes a group of generals, who have a common mission (=well-being of the blockchain). 
+They can only communicate with messages (=P2P communiation)
+and some of the generals might be traitors (=malicious nodes)
+or messengers might be captured (=timeout)
+[[p.1, LamShoPea16]](https://www.microsoft.com/en-us/research/uploads/prod/2016/12/The-Byzantine-Generals-Problem.pdf)
+
 ## Application Blockchain Interface (ABCI)
 
-[2](https://docs.tendermint.com/master/introduction/what-is-tendermint.html) <br>
+https://docs.tendermint.com/master/introduction/what-is-tendermint.html <br>
 https://github.com/tendermint/tendermint/tree/master/spec/abci/
 
 
@@ -131,9 +176,100 @@ with which it communicates.
 
 ## Tendermint Consensus Process
 
-[1](https://docs.tendermint.com/master/assets/img/consensus_logic.e9f4ca6f.png)
+https://docs.tendermint.com/master/assets/img/consensus_logic.e9f4ca6f.png
 
-- Validators propose blocks of transactions and vote on them
+- Tendermint consensus is organized into voting rounds,
+where a new validator is chosen
+proportionally to their staked assets
+to propose a new block containing transactions 
+[[p.1, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
+
+- Tendermint introduced a new termination mechanism,
+to prevent endless rounds and locked nodes from blocking
+[[p.5, BucKwoMil18]](https://arxiv.org/abs/1807.04938):
+
+  - For each step in a round (proposal, pre-vote, pre-commit)
+  there are defined timeouts, 
+  after which `nil` is returned,
+  if there was no decision.
+
+  - Before the global stabililization time (GST),
+  the timeouts are increased after each round, 
+  if a sufficient value was not found before.
+
+- Also, unlike in predecessor algorithms (PBFT, DLS),
+does not include actual messages, 
+when voting,
+but rather cryptographic proof of the message contents
+[[p.2-3, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
+
+- There is only one "mode", 
+meaning that the same rounds are completed,
+whether or not a valid block is proposed
+and sufficient votes are collected
+[[p.3, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
+
+- All communication is done within a specified time $\Delta t$
+after a message is sent. Final time is $t_{end} = \max\{t_{message}, GST\} + \Delta t$,
+where $GST$ is the Global Stabilization Time.
+[[p.3, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
+
+- Through use of cryptographic signatures,
+no "fake" messages from different senders can be generated 
+[[p.4, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
+
+- Messages with invalid signatures
+are removed before entering the mempool 
+[[p.4, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
+
+- The state machine replication is achieved
+by sequentially going through consensus rounds
+to agree on the blocks of transactions,
+which are then executed and stored in the blockchain
+[[p.4, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
+
+- Based on Validity Predicate-based Byzantine consensus,
+which has three main properties [[p.4-5, BucKwoMil18]](https://arxiv.org/abs/1807.04938):
+
+  - Agreement: Non-malicious nodes will always decide
+  on the same values.
+
+  - Termination: 
+  All participating nodes will produce a decision 
+  (either nil or pre-vote/pre-commit)
+
+  - Validity:
+  Application-specific --> e.g. in terms of blockchain 
+  a block is not valid if it doesn't contain the hash of the last block.
+
+- Tendermint (and other BFT algorithms) works, 
+if not more than 1/3 of nodes are misbehaving 
+(with or without malicious intent)
+[[p.5, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
+
+- Each round, a new validator is selected to propose a block
+in proportion to their staked assets.
+
+- In the first round at a new block height,
+the validator can freely choose, which block to propose 
+(i.e. which transactions to include)
+[[p.7, BucKwoMil18]](https://arxiv.org/abs/1807.04938)
+
+- The proposed block is forwarded to the validator's peer nodes.
+These check the proposed block (=value $v$) and send a *pre-vote* message containing $id(v)$. 
+If the pre-vote timeout expires before sending the message
+or the node could not identify the block as valid,
+`nil` is sent as the pre-vote value. <br>
+When a node receives a block proposal and $2f+1$ pre-vote messages containing $id(v)$,
+it sends a *pre-commit* message with $id(v)$. 
+Again, in any other case (the node deems the block invalid, 
+$2f+1$ pre-votes not received,
+or pre-commit timeout is expired), 
+a pre-commit message containing `nil` is sent. 
+If a node receives a block proposal as well as $2f+1$ pre-commit messages,
+it decides, that this block will be committed. 
+Through gossiping, this decision is broadcasted to the network
+[[p.8, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
 
 - If a block is not committed, 
 the next round is started at the same block height
@@ -175,7 +311,7 @@ to receive a proposal block from the proposing validator
 before jumping to the next voting round
 and abandoning the currently proposed block.
 Because of this, 
-Tendermint can be considered **weakly synchronous**
+Tendermint can be considered **weakly** or **partly synchronous**
 while all other parts of the protocol
 are asynchronous.
 
@@ -289,4 +425,8 @@ which is encapsuled by Tendermint Core.
 No direct requests to the application layer
 should be able to change state variables.
 
+This is supported by [[p.4, BucKwoMil18]](https://arxiv.org/abs/1807.04938),
+where it is stated,
+that transaction verification should be handled by the application
+that uses Tendermint.
 
