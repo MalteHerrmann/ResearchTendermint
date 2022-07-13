@@ -92,8 +92,23 @@ These peers communicate through a gossip protocol
 
 ### Motivation behind Tendermint
 
+- Proof-of-Work algorithms such as the one used in Bitcoin 
+have a large environmental impact,
+as the security of the chain 
+lies in solving a complex mathematical problem,
+the complexity of which can be adjusted,
+so that solutions to the problem are found, 
+and therefore new blocks mined,
+at a desired throughput rate. <br>
+As more and better processors tackle this challenge,
+and PoW blockchains in general become more widely used,
+the environmental footprint of this operation severely increases. <br>
+Proof-of-Stake algorithms, which Tendermint and others use,
+require much less computational effort 
+[[p.1, Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
+
 - Before Tendermint, all blockchains had to include 
-writing software to establish the peer-to-peer connections, 
+custom software to establish the peer-to-peer connections, 
 broadcast transactions, 
 handle the mempool, 
 reach consensus, 
@@ -110,6 +125,34 @@ because too many modules were interconnected
 - Leave application details to blockchain developers and
 only offer the base layers, 
 which are concerned with networking and consensus.
+
+### Possible exploits
+
+- *Nothing at stake problem*: <br>
+Network participants do not face a high enough incentive to not act maliciously
+[[p.1, Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
+
+- *Long range double-spending attacks*: <br>
+A 2/3 majority of validators unbond their assets 
+and sell their coins to others, 
+who are not aware of any malicious activity. 
+Then, they publish a fork of the blockchain, 
+but have already made profit from the selling of the now double-spent coins.
+[[p.4, Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
+
+
+- *Short range double-spending attacks*: <br>
+This describes a blockchain fork,
+which has happened at such a recent time,
+that the malicious validators could not unbond their assets yet. 
+In this case, the bonded assets of the validators can be slashed,
+who participate in the fork. <br>
+However, this means, that >1/3 of bonded assets are destroyed at once,
+which is still damaging the network as a whole. <br>
+By adjusting the bonding requirements to become a validator,
+the probability for these kinds of attacks can be adjusted
+[[p.4, Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
+
 
 ## Predecessors of Tendermint
 
@@ -178,11 +221,73 @@ with which it communicates.
 
 https://docs.tendermint.com/master/assets/img/consensus_logic.e9f4ca6f.png
 
-- Tendermint consensus is organized into voting rounds,
-where a new validator is chosen
-proportionally to their staked assets
-to propose a new block containing transactions 
-[[p.1, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
+Tendermint achieves BFT SMR
+by sequentially reaching consensus on new blocks,
+that shall be appended to the canonical representation of the blockchain.
+These blocks include transactions, 
+which update the state variables of the system. <br>
+The consensus is organized into voting rounds,
+where for each round a new validator is chosen from the validator set
+to propose a new block.
+This is handled by a deterministic function (not at random),
+which selects validators in a pattern relating to their bonded assets.
+[[p.6 Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
+
+A single round consists of at least three and at most 5 steps: <br>
+*Propose*, *prevote* and *precommit* happen in every round, 
+whereas *commit* and *new height* only occur if consensus on a block was reached.
+[[p.5 Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
+
+In the first round at a new block height 
+(=after the last block was committed),
+the proposer can freely choose 
+which transactions from the mempool to include in the proposed block. 
+The proposed block is forwarded to the validator's peer nodes.<br>
+These check the proposed block (=value $v$) for validity
+and sign a *prevote* message containing $id(v)$. 
+If the prevote timeout expires before sending the message,
+the node could not identify the block as valid,
+or no proposal has reached the node,
+`nil` is sent as the prevote value. <br>
+When a node receives a block proposal and $2f+1$ prevote messages containing $id(v)$,
+it sends a *precommit* message with $id(v)$. 
+Again, in any other case (the node deems the block invalid, 
+$2f+1$ prevotes not received,
+or precommit timeout is expired), 
+a precommit message containing `nil` is sent. 
+If a node receives a block proposal as well as $2f+1$ precommit messages,
+it decides, that this block will be committed
+and signs a *commit* message. 
+If the node has not received the actual block during the previous steps,
+it is supplied with it during the *commit* step. 
+All commit messages are broadcasted to the network.
+When a node receives a 2/3 majority of commits for a specific block,
+the CommitTime is written to the block header
+and the *NewHeight* step is invoked. <br>
+After commiting, a certain period of time is waited,
+to include commit signings from slower validators. 
+Then, the next block is proposed.<br>
+[[p.1, 4, 7f. BucKwoMil18]](https://arxiv.org/abs/1807.04938)
+[[p.4, 6-8 Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
+
+When a round terminates without consensus on a new block,
+i.e. less than 2/3 majority has casted a commit vote,
+a new round starts.
+In order to achieve consensus when timeouts are the cause of non-consensus,
+the timeout values are increased with each starting round.
+
+*Commit* messages are special, 
+because they are always broadcasted in any step or step.
+If a node receives a 2/3 majority vote for commiting a block,
+even though the node itself was only in the prevote round,
+the commit stage is entered
+[[p.8 Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
+
+![Consensus Logic [[Ten22]](https://docs.tendermint.com/master/assets/img/consensus_logic.e9f4ca6f.png)](./images/consensus_logic.png)
+
+- TODO: Locking erläutern
+
+### Notes on consensus mechanism
 
 - Tendermint introduced a new termination mechanism,
 to prevent endless rounds and locked nodes from blocking
@@ -218,16 +323,6 @@ where $GST$ is the Global Stabilization Time.
 no "fake" messages from different senders can be generated 
 [[p.4, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
 
-- Messages with invalid signatures
-are removed before entering the mempool 
-[[p.4, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
-
-- The state machine replication is achieved
-by sequentially going through consensus rounds
-to agree on the blocks of transactions,
-which are then executed and stored in the blockchain
-[[p.4, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
-
 - Based on Validity Predicate-based Byzantine consensus,
 which has three main properties [[p.4-5, BucKwoMil18]](https://arxiv.org/abs/1807.04938):
 
@@ -247,29 +342,15 @@ if not more than 1/3 of nodes are misbehaving
 (with or without malicious intent)
 [[p.5, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
 
-- Each round, a new validator is selected to propose a block
-in proportion to their staked assets.
+- A fork (=two blocks at the same height get a 2/3 majority vote) can only happen,
+if >1/3 of validators try to double sign.
+[[p.4 Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
 
-- In the first round at a new block height,
-the validator can freely choose, which block to propose 
-(i.e. which transactions to include)
-[[p.7, BucKwoMil18]](https://arxiv.org/abs/1807.04938)
+- TODO: Mempool noch erläutern
 
-- The proposed block is forwarded to the validator's peer nodes.
-These check the proposed block (=value $v$) and send a *pre-vote* message containing $id(v)$. 
-If the pre-vote timeout expires before sending the message
-or the node could not identify the block as valid,
-`nil` is sent as the pre-vote value. <br>
-When a node receives a block proposal and $2f+1$ pre-vote messages containing $id(v)$,
-it sends a *pre-commit* message with $id(v)$. 
-Again, in any other case (the node deems the block invalid, 
-$2f+1$ pre-votes not received,
-or pre-commit timeout is expired), 
-a pre-commit message containing `nil` is sent. 
-If a node receives a block proposal as well as $2f+1$ pre-commit messages,
-it decides, that this block will be committed. 
-Through gossiping, this decision is broadcasted to the network
-[[p.8, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
+- Messages with invalid signatures
+are removed before entering the mempool 
+[[p.4, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
 
 - If a block is not committed, 
 the next round is started at the same block height
@@ -285,10 +366,13 @@ in order to pass the proposed block on to the next stage
 - Locking rules, so that 
 validators do not commit different blocks at the same block height.
 The validator is locked to the block 
-when pre-commiting (or should this be propose? See questions..) a block.
+when pre-commiting a block.
 It must pre-vote the block
 and can only unlock
 if there is a polka for that block.
+
+- TODO: hier noch mehr Infos sammeln -> in
+[[p.7 Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
 
 - In PoS applications (like all Cosmos based blockchains), 
 2/3 of voting power 
@@ -301,8 +385,60 @@ to bond the chain currency in a security deposit
 which will be slashed when misbehaving
 with regards to the consensus protocol.
 
+- TODO: Explain Proof of Safety and Proof of Liveness from 
+[[p.8 Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
+
+- The Tendermint PoS algorithm does not benefit those,
+who try to claim a bigger share of the fees
+by removing a certain amount of signatures:
+[[p.9 Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
+
+Expected benefit:
+$\sum Fees * v_a * v_p * v_p$
+
+Expected detriment:
+$\sum Fees * v_a * v_p$
+
+Because $v_i < 1$, the benefit will always be smaller than the detriment.
+
 
 ## Synchrony, Asynchrony, Partial Synchrony
+
+Distributed systems can be classified into 
+synchronous, asynchronous and partially synchronous systems.
+
+Fully asynchoronous systems do not hold any assumptions about the time 
+it takes to communicate between nodes
+or the speed at which instructions can be processed at the receiving end (=computing power).<br>
+Fully synchronous systems can guarantee, 
+that messages are correctly communicated
+and processed within a known timeframe.<br>
+Partially synchronous systems can present hybrid forms of these two extremes,
+where certain constraints are defined 
+and freedom is given on the other side.<br>
+
+The consensus algorithm in Tendermint 
+can be considered **weakly** or **partially synchronous**,
+because it assumes, that there is an upper bound $\Delta$,
+after which all messages are delivered.
+This describes the real-world phenomenon, 
+that previously unknown latency will be present in the system,
+but that this latency will not be endless,
+if the network participants are not offline. <br>
+This is implemented by means of several timeout values,
+after which a `nil` message is signed,
+if the node has not responded yet
+[[p.5, Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
+
+FLP impossiblility describes the characteristic, that
+out of the three properties safety, liveness and fault tolerance,
+only two can be achieved. 
+In globally distributed systems, like blockchains,
+where communication can fail
+and network participants do not necessarily trust each other,
+fault tolerance **must** be given. <br>
+This means, that blockchain algorithms can choose between implementing
+safety or liveness.
 
 - If validators are offline, lagging, etc. 
 they can be skipped in Tendermint.
@@ -310,10 +446,6 @@ Any validator waits a certain, small amount of time
 to receive a proposal block from the proposing validator
 before jumping to the next voting round
 and abandoning the currently proposed block.
-Because of this, 
-Tendermint can be considered **weakly** or **partly synchronous**
-while all other parts of the protocol
-are asynchronous.
 
 ## Implementation details
 
@@ -429,4 +561,64 @@ This is supported by [[p.4, BucKwoMil18]](https://arxiv.org/abs/1807.04938),
 where it is stated,
 that transaction verification should be handled by the application
 that uses Tendermint.
+
+
+## Random things
+
+A message is not sent to the whole network,
+but rather to the group of the sender's peers.
+These forward these messages to their respective peer groups,
+until it is fully spread across the network.
+Hence the term gossiping [[ByiKwoBuc16]](https://open.spotify.com/episode/6eSJAtWT9btfca4mwYO7KT).
+
+The incentive for validators 
+to work towards the "good" for the blockchain
+is not the economic sacrifice 
+in terms of computing power
+but rather the staked assets, 
+which can be slashed for undesired behaviour 
+[[ByiKwoBuc16]](https://open.spotify.com/episode/6eSJAtWT9btfca4mwYO7KT).
+
+In Nakamoto consensus anybody can put up the work to be the next block proposer,
+which makes this algorithm *censorship-resistant*. <br>
+In opposition to that, 
+PoS only allows a selection of validators to propose a block. 
+This can therefore be classified as *non-censorship-resistant*
+[[ByiKwoBuc16]](https://open.spotify.com/episode/6eSJAtWT9btfca4mwYO7KT).
+
+
+Technically, one does not need to have a large amount of Bitcoin
+in order to attack the blockchain. 
+One just needs sufficient resources to build the longest chain (51% attack). <br>
+To propose malicious or invalid blocks to a PoS network, 
+the attacker has to be in control of at least 33% of the staked assets 
+of the current validator set. <br>
+New validator sets are only selected after a specified amount of time (*epoch*),
+which means, that an attacker cannot immediately gain control of the necessary assets, 
+without some time passing, where the suspicious behaviour could be noticed
+[[ByiKwoBuc16]](https://open.spotify.com/episode/6eSJAtWT9btfca4mwYO7KT).
+
+!(../images/block_structure.png)
+
+### Block structure
+A *block* contains a number of transactions,
+which users want to execute on chain.
+Additionally, there is block information contained, 
+like block height, fees used, or commit time.
+In order to easily verify the correctness of the block,
+a number of cryptographic information is stored as well. <br>
+This contains the signatures from all validators,
+who have signed to commit this block, 
+the block hash of the previous block,
+as well as the *state hash*,
+which is a representation of the account state. <br>
+More hashes (*header hash*, *validation hash* & *transactions hash*) are generated 
+from the header, signatures and transaction data included in the block.
+In turn, these are hashed together into the *block hash* of the new block.<br>
+These are [*Merkle tree root hashes*](https://en.wikipedia.org/wiki/Merkle_tree), 
+which contain cryptographic trails of all subitems, 
+that were hashed together.
+
+
+
 
