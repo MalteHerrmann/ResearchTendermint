@@ -25,74 +25,76 @@ as a means to improve tracking text changes with Git.
 https://docs.tendermint.com/master/ <br>
 https://docs.tendermint.com/master/introduction/what-is-tendermint.html
 
-- blockchain application platform
-  - comparable to a web-server for websites, 
-  as Tendermint is "serving" blockchain applications
+In any PoS blockchain application
+three main layers of concern have to be addressed:
 
-- Consists of two major components
-  - Blockchain consensus engine (Tendermint Core)
-  - Application Blockchain Interface ([ABCI](#application-blockchain-interface-abci))
+- Networking (P2P communication)
+- Consensus
+- Application layer
 
-- Software for state machine replication (SMR) for any 
-deterministic, finite state machine, 
-with the characteristic of being byzantine fault tolerant (BFT).
+Tendermint is a blockchain application platform, 
+built to serve the two ground layers of networking and consensus
+in a standardized way,
+so that new blockchains can be developed on top of it.
+This has the advantage, 
+that blockchain developers primarily have to be concerned with
+building the application layer, 
+and with that, their business logic.
+<br>
+It can be compared to a web-server for web applications,
+where the web developer only has to build the website logic,
+instead of rewriting the HTTP protocol.
 
-  - Finite State machine: (https://blog.markshead.com/869/state-machines-computer-science/)
+To achieve this, 
+it applies state machine replication (SMR)
+for any deterministic, finite state machine,
+whilst being byzantine fault tolerant.
 
-    - A state machine is basically any black box, 
-    which takes an input, 
-    contains state variables, 
-    which define the system state, 
-    and changes these in response to the input.
-    
-    - Finite means, that the machine/algorithm cannot describe continuous state changes, 
-    but rather describes a finite amount of possible states (unlike water levels).
+Tendermint itself consists of two major components:
+  
+- [Blockchain consensus engine](#tendermint-consensus-process) (Tendermint Core) 
+- [Application Blockchain Interface](#application-blockchain-interface-abci) (ABCI)
 
-    - Deterministic means, that the same result is always achieved 
-    when given the same initial conditions 
-    and the same requests
-    between states.
+### Definitions
 
-  - State machine replication (https://link.springer.com/chapter/10.1007/BFb0042323)
+*State machines*: <br>
+A state machine is basically a black box, 
+which takes an input, 
+contains state variables, 
+which define the system state, 
+and changes these in response to the input
+[[She11]](https://blog.markshead.com/869/state-machines-computer-science/).
 
-    - State machine replication is a process, 
-    especially useful for implementing distributed systems.
+*Finite state machines*:
+A finite state machine cannot describe continuous state changes,
+but rather describes a finite amount of possible states
+(e.g. unlike water levels in a pool or very simply the length of a line).
+[[She11]](https://blog.markshead.com/869/state-machines-computer-science/).
 
-    - Distributed systems are defined as being processors, 
-    which are physically and electrically isolated.
+*Deterministic state machines*:
+Deterministic means, that the same result is always achieved 
+when given the same initial conditions 
+and the same requests
+between states.
+[[She11]](https://blog.markshead.com/869/state-machines-computer-science/).
 
-    - The process of voting 
-    on the coordinated output of the distributed machines 
-    is suited to real-time applications, 
-    as opposed to "failure detection and retry"-systems, 
-    which would take additional computing time if a failure or wrong information occurs on one of the machines.
+*State machine replication*:
+In distributed systems, it ideally is achieved, 
+that the machine instructions are executed on every participant of the system.
+This can be done through state machine replication (SMR).
+[[Sch90]](https://link.springer.com/chapter/10.1007/BFb0042323).
 
-- Consensus is the central principle 
-through which it is guaranteed,
-that all participating subsystems in a distributed system
-receive the exact same information/transactions 
-in the same order [[p.1, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
-
-- Classic SMR algorithms concerned themselves with
-a small amount of connected machines,
-that were often in the same network,
-and all participants could be trusted 
-[[p.1, BucKwoMil18]](https://arxiv.org/abs/1807.04938). 
-
-- Blockchains are networks 
-of hundreds or thounsands of nodes,
-which can be in arbitrary locations,
-and the participants do not know each other.
-Additionally, nodes are usually only
-connected to their peers, 
-which is a subset of the total system. 
-These peers communicate through a gossip protocol
-[[p.1, BucKwoMil18]](https://arxiv.org/abs/1807.04938). 
-
+*Distributed systems*:
+Distributed systems are defined as being processors, 
+which are physically and electrically isolated.
 
 ### Motivation behind Tendermint
 
-- Proof-of-Work algorithms such as the one used in Bitcoin 
+There are several perspectives, 
+from which Tendermint tried to improve on existing architecture.
+
+#### Environmental Impact
+Proof-of-Work algorithms such as the one used in Bitcoin 
 have a large environmental impact,
 as the security of the chain 
 lies in solving a complex mathematical problem,
@@ -107,32 +109,52 @@ Proof-of-Stake algorithms, which Tendermint and others use,
 require much less computational effort 
 [[p.1, Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
 
-- Before Tendermint, all blockchains had to include 
+#### Software Engineering
+Before Tendermint, all blockchains had to include 
 custom software to establish the peer-to-peer connections, 
 broadcast transactions, 
 handle the mempool, 
 reach consensus, 
 keep track of accounts, balances and contracts, 
 etc. 
+<br>
+The projects which were around at the time
+like Bitcoin and Ethereum
+have large, interconnected and monolithic codebases,
+which are a typically seen as a bad practice in software design, 
+as modules are strongly coupled
+and cannot not be used or developed separately.
 
-- large, interconnected and monolithic codebases 
-are a bad practice in software design, 
-because too many modules were interconnected
- and could not be used and developed separately.
-
-- Modular approach to reduce strong coupling between subsystems
-
-- Leave application details to blockchain developers and
+#### Ecosystem Growth
+Handling consensus and networking, 
+and only leaving the application details to blockchain developers
+lowers the cost of entry into the ecosystem
 only offer the base layers, 
 which are concerned with networking and consensus.
 
+#### State Machine Replication
+Classic SMR algorithms concerned themselves with
+a small amount of connected machines,
+that were often in the same network,
+and all participants could be trusted. <br>
+Blockchains on the other hand are networks 
+of hundreds or thounsands of nodes,
+which can be in arbitrary locations
+and the participants do not know each other.
+Additionally, nodes are usually only
+connected to their peers, 
+which is a subset of the total system. 
+These peers communicate through a gossip protocol
+[[p.1, BucKwoMil18]](https://arxiv.org/abs/1807.04938). 
+
+
 ### Possible exploits
 
-- *Nothing at stake problem*: <br>
+*Nothing at stake problem*: <br>
 Network participants do not face a high enough incentive to not act maliciously
 [[p.1, Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
 
-- *Long range double-spending attacks*: <br>
+*Long range double-spending attacks*: <br>
 A 2/3 majority of validators unbond their assets 
 and sell their coins to others, 
 who are not aware of any malicious activity. 
@@ -141,7 +163,7 @@ but have already made profit from the selling of the now double-spent coins.
 [[p.4, Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
 
 
-- *Short range double-spending attacks*: <br>
+*Short range double-spending attacks*: <br>
 This describes a blockchain fork,
 which has happened at such a recent time,
 that the malicious validators could not unbond their assets yet. 
@@ -154,20 +176,15 @@ the probability for these kinds of attacks can be adjusted
 [[p.4, Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
 
 
-## Predecessors of Tendermint
+## Predecessors of Tendermint Consensus
 
-- Direct predecessors of Tendermint are the PBFT and DLS algorithms.
+Direct predecessors of Tendermint consensus are the PBFT [CasLis02](https://www.microsoft.com/en-us/research/wp-content/uploads/2017/01/p398-castro-bft-tocs.pdf) and DLS algorithms
+[[DwoLynSto88]](https://arxiv.org/abs/1807.04938):
   
-  - Tendermint has three communication steps per round like PBFT
-  (proposal + two voting steps)
-  
-  - Tendermint uses different block proposers each round as in DLS
+- Tendermint has three communication steps per round like PBFT
+(proposal + two voting steps)
 
-[[p.2, BucKwoMil18]](https://arxiv.org/abs/1807.04938)
-
-- PBFT (Practical Byzantine Fault Tolerance) SMR [[p.X, ]](https://www.microsoft.com/en-us/research/wp-content/uploads/2017/01/p398-castro-bft-tocs.pdf)
-
-- DLS algorithm [[]](https://groups.csail.mit.edu/tds/papers/Lynch/jacm88.pdf)
+- Tendermint uses different block proposers each round as in DLS
 
 
 ## Byzantine Fault Tolerance
@@ -184,38 +201,6 @@ They can only communicate with messages (=P2P communiation)
 and some of the generals might be traitors (=malicious nodes)
 or messengers might be captured (=timeout)
 [[p.1, LamShoPea16]](https://www.microsoft.com/en-us/research/uploads/prod/2016/12/The-Byzantine-Generals-Problem.pdf)
-
-## Application Blockchain Interface (ABCI)
-
-https://docs.tendermint.com/master/introduction/what-is-tendermint.html <br>
-https://github.com/tendermint/tendermint/tree/master/spec/abci/
-
-
-- Interface to feed input from software 
-written in any language 
-to the Tendermint Core consensus engine.
-
-- The implementation in Tendermint (Tendermint Socket Protocol (TSP))
-satisfies this interface.
-
-- Tendermint Core implements three socket connections 
-between ABCI and applications
-for the following purposes:
-  
-  - Validation of transactions, that are added to the mempool
-
-  - Running block proposals in the consensus engine
-
-  - Querying the application state
-
-- Contains methods, 
-which offer corresponding `Request` and `Response` message types 
-in order to interact with the interface. 
-
-- All messages and methods are defined in protocol buffers, 
-which makes the interface agnostic to the programming language of the application, 
-with which it communicates.
-
 
 ## Tendermint Consensus Process
 
@@ -283,7 +268,7 @@ even though the node itself was only in the prevote round,
 the commit stage is entered
 [[p.8 Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
 
-![Consensus Logic [[Ten22]](https://docs.tendermint.com/master/assets/img/consensus_logic.e9f4ca6f.png)](./images/consensus_logic.png)
+<div align="center"> <img src="./images/consensus_logic.png" alt="Consensus Logic" width="600"/> </div>
 
 - TODO: Locking erläutern
 
@@ -401,51 +386,37 @@ $\sum Fees * v_a * v_p$
 
 Because $v_i < 1$, the benefit will always be smaller than the detriment.
 
+## Application Blockchain Interface (ABCI)
 
-## Synchrony, Asynchrony, Partial Synchrony
+https://docs.tendermint.com/master/introduction/what-is-tendermint.html <br>
+https://github.com/tendermint/tendermint/tree/master/spec/abci/
 
-Distributed systems can be classified into 
-synchronous, asynchronous and partially synchronous systems.
 
-Fully asynchoronous systems do not hold any assumptions about the time 
-it takes to communicate between nodes
-or the speed at which instructions can be processed at the receiving end (=computing power).<br>
-Fully synchronous systems can guarantee, 
-that messages are correctly communicated
-and processed within a known timeframe.<br>
-Partially synchronous systems can present hybrid forms of these two extremes,
-where certain constraints are defined 
-and freedom is given on the other side.<br>
+- Interface to feed input from software 
+written in any language 
+to the Tendermint Core consensus engine.
 
-The consensus algorithm in Tendermint 
-can be considered **weakly** or **partially synchronous**,
-because it assumes, that there is an upper bound $\Delta$,
-after which all messages are delivered.
-This describes the real-world phenomenon, 
-that previously unknown latency will be present in the system,
-but that this latency will not be endless,
-if the network participants are not offline. <br>
-This is implemented by means of several timeout values,
-after which a `nil` message is signed,
-if the node has not responded yet
-[[p.5, Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
+- The implementation in Tendermint (Tendermint Socket Protocol (TSP))
+satisfies this interface.
 
-FLP impossiblility describes the characteristic, that
-out of the three properties safety, liveness and fault tolerance,
-only two can be achieved. 
-In globally distributed systems, like blockchains,
-where communication can fail
-and network participants do not necessarily trust each other,
-fault tolerance **must** be given. <br>
-This means, that blockchain algorithms can choose between implementing
-safety or liveness.
+- Tendermint Core implements three socket connections 
+between ABCI and applications
+for the following purposes:
+  
+  - Validation of transactions, that are added to the mempool
 
-- If validators are offline, lagging, etc. 
-they can be skipped in Tendermint.
-Any validator waits a certain, small amount of time
-to receive a proposal block from the proposing validator
-before jumping to the next voting round
-and abandoning the currently proposed block.
+  - Running block proposals in the consensus engine
+
+  - Querying the application state
+
+- Contains methods, 
+which offer corresponding `Request` and `Response` message types 
+in order to interact with the interface. 
+
+- All messages and methods are defined in protocol buffers, 
+which makes the interface agnostic to the programming language of the application, 
+with which it communicates.
+
 
 ## Implementation details
 
@@ -562,6 +533,51 @@ where it is stated,
 that transaction verification should be handled by the application
 that uses Tendermint.
 
+## Synchrony, Asynchrony, Partial Synchrony
+
+Distributed systems can be classified into 
+synchronous, asynchronous and partially synchronous systems.
+
+Fully asynchoronous systems do not hold any assumptions about the time 
+it takes to communicate between nodes
+or the speed at which instructions can be processed at the receiving end (=computing power).<br>
+Fully synchronous systems can guarantee, 
+that messages are correctly communicated
+and processed within a known timeframe.<br>
+Partially synchronous systems can present hybrid forms of these two extremes,
+where certain constraints are defined 
+and freedom is given on the other side.<br>
+
+The consensus algorithm in Tendermint 
+can be considered **weakly** or **partially synchronous**,
+because it assumes, that there is an upper bound $\Delta$,
+after which all messages are delivered.
+This describes the real-world phenomenon, 
+that previously unknown latency will be present in the system,
+but that this latency will not be endless,
+if the network participants are not offline. <br>
+This is implemented by means of several timeout values,
+after which a `nil` message is signed,
+if the node has not responded yet
+[[p.5, Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
+
+FLP impossiblility describes the characteristic, that
+out of the three properties safety, liveness and fault tolerance,
+only two can be achieved. 
+In globally distributed systems, like blockchains,
+where communication can fail
+and network participants do not necessarily trust each other,
+fault tolerance **must** be given. <br>
+This means, that blockchain algorithms can choose between implementing
+safety or liveness.
+
+- If validators are offline, lagging, etc. 
+they can be skipped in Tendermint.
+Any validator waits a certain, small amount of time
+to receive a proposal block from the proposing validator
+before jumping to the next voting round
+and abandoning the currently proposed block.
+
 
 ## Random things
 
@@ -598,9 +614,23 @@ which means, that an attacker cannot immediately gain control of the necessary a
 without some time passing, where the suspicious behaviour could be noticed
 [[ByiKwoBuc16]](https://open.spotify.com/episode/6eSJAtWT9btfca4mwYO7KT).
 
-!(../images/block_structure.png)
+The process of voting 
+on the coordinated output of the distributed machines 
+is suited to real-time applications, 
+as opposed to "failure detection and retry"-systems, 
+which would take additional computing time if a failure or wrong information occurs on one of the machines.
+[[Sch90]](https://link.springer.com/chapter/10.1007/BFb0042323).
+
+- Consensus is the central principle 
+through which it is guaranteed,
+that all participating subsystems in a distributed system
+receive the exact same information/transactions 
+in the same order [[p.1, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
 
 ### Block structure
+
+<div align="center"> <img src="./images/block_structure.png" alt="Block Structure" width="400"/> </div>
+
 A *block* contains a number of transactions,
 which users want to execute on chain.
 Additionally, there is block information contained, 
