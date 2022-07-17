@@ -8,6 +8,35 @@ about the structure of the .md file itself,
 I am adhering to [semantic linefeeds](https://rhodesmill.org/brandon/2012/one-sentence-per-line/) 
 as a means to improve tracking text changes with Git.
 
+## Contents
+
+- [General Info about Tendermint](#general-info-about-tendermint)
+  - [Definitions](#definitions)
+  - [Motivations behind Tendermint](#motivation-behind-tendermint)
+    - [Environmental Impact](#environmental-impact)
+    - [Software Engineering](#software-engineering)
+    - [Ecosystem Growth](#ecosystem-growth)
+    - [State Machine Replication](#state-machine-replication) (SMR)
+  - [Possible Exploits](#possible-exploits)
+- [Predecessors of Tendermint Consensus](#predecessors-of-tendermint-consensus)
+- [Byzantine Fault Tolerance](#byzantine-fault-tolerance) (BFT)
+- [Tendermint Consensus Process](#tendermint-consensus-process)
+  - [Notes](#notes-on-consensus-mechanism)
+- [Application Blockchain Interface](#application-blockchain-interface-abci) (ABCI)
+  - [Implementation Details](#implementation-details)
+- [ABCI++](#abci)
+  - [Motivation for ABCI++](#motivation-for-abci)
+  - [Implementation](#implementation)
+  - [Points of Caution](#points-of-caution)
+  - [Outlook](#outlook)
+- [Application Architecture](#application-architecture)
+- [Meaning of Tendermint for Cosmos](#meaning-of-tendermint-for-cosmos-sdk)
+- [Synchrony, Asynchrony, Partial Synchrony](#synchrony-asynchrony-partial-synchrony)
+- [Safety and Liveness - FLP impossibility](#safety-and-liveness---flp-impossiblility)
+- [Finality](#finality)
+- [Random Things](#random-things)
+  - [Block Structure](#block-structure)
+
 
 ## Reference topics
 
@@ -48,7 +77,7 @@ instead of rewriting the HTTP protocol.
 To achieve this, 
 it applies state machine replication (SMR)
 for any deterministic, finite state machine,
-whilst being byzantine fault tolerant.
+whilst being byzantine fault tolerant (BFT).
 
 Tendermint itself consists of two major components:
   
@@ -65,26 +94,26 @@ which define the system state,
 and changes these in response to the input
 [[She11]](https://blog.markshead.com/869/state-machines-computer-science/).
 
-*Finite state machines*:
+*Finite state machines*: <br>
 A finite state machine cannot describe continuous state changes,
 but rather describes a finite amount of possible states
 (e.g. unlike water levels in a pool or very simply the length of a line).
 [[She11]](https://blog.markshead.com/869/state-machines-computer-science/).
 
-*Deterministic state machines*:
+*Deterministic state machines*: <br>
 Deterministic means, that the same result is always achieved 
 when given the same initial conditions 
 and the same requests
 between states.
 [[She11]](https://blog.markshead.com/869/state-machines-computer-science/).
 
-*State machine replication*:
+*State machine replication*: <br>
 In distributed systems, it ideally is achieved, 
 that the machine instructions are executed on every participant of the system.
 This can be done through state machine replication (SMR).
 [[Sch90]](https://link.springer.com/chapter/10.1007/BFb0042323).
 
-*Distributed systems*:
+*Distributed systems*: <br>
 Distributed systems are defined as being processors, 
 which are physically and electrically isolated.
 
@@ -124,6 +153,8 @@ have large, interconnected and monolithic codebases,
 which are a typically seen as a bad practice in software design, 
 as modules are strongly coupled
 and cannot not be used or developed separately.
+<br>
+A separation of concerns is achieved by Tendermint.
 
 #### Ecosystem Growth
 Handling consensus and networking, 
@@ -146,6 +177,10 @@ connected to their peers,
 which is a subset of the total system. 
 These peers communicate through a gossip protocol
 [[p.1, BucKwoMil18]](https://arxiv.org/abs/1807.04938). 
+<br>
+Tendermint introduced a new termination mechanism,
+to prevent endless rounds and nodes from blocking
+[[p.5, BucKwoMil18]](https://arxiv.org/abs/1807.04938):
 
 
 ### Possible exploits
@@ -175,13 +210,20 @@ By adjusting the bonding requirements to become a validator,
 the probability for these kinds of attacks can be adjusted
 [[p.4, Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
 
+If malicious behavior in form of double-voting 
+or  is suspected by a node
+a `Evidence` message can be sent
+to notify the network of this behavior
+[[ABCI Docs]](https://docs.tendermint.com/master/spec/abci/abci.html) [[Evidence Docs]](https://docs.tendermint.com/master/spec/consensus/evidence.html).
 
 ## Predecessors of Tendermint Consensus
 
-Direct predecessors of Tendermint consensus are the PBFT [CasLis02](https://www.microsoft.com/en-us/research/wp-content/uploads/2017/01/p398-castro-bft-tocs.pdf) and DLS algorithms
+Direct predecessors of Tendermint consensus are the pBFT 
+[[CasLis02]](https://www.microsoft.com/en-us/research/wp-content/uploads/2017/01/p398-castro-bft-tocs.pdf) 
+and DLS algorithms
 [[DwoLynSto88]](https://arxiv.org/abs/1807.04938):
   
-- Tendermint has three communication steps per round like PBFT
+- Tendermint has three communication steps per round like pBFT
 (proposal + two voting steps)
 
 - Tendermint uses different block proposers each round as in DLS
@@ -189,18 +231,51 @@ Direct predecessors of Tendermint consensus are the PBFT [CasLis02](https://www.
 
 ## Byzantine Fault Tolerance
 
-- Concept to describe a distributed system, 
-which continues to produce correct results, 
-even if 1/3 of all participating subsystems 
-are fraudulent or misbehaving in any other way 
-(e.g. being broken, failing to connect, ...).
-
-- BFT solves the Byzantine Generals Problem,
+BFT solves the Byzantine Generals Problem,
 which describes a group of generals, who have a common mission (=well-being of the blockchain). 
 They can only communicate with messages (=P2P communiation)
 and some of the generals might be traitors (=malicious nodes)
-or messengers might be captured (=timeout)
-[[p.1, LamShoPea16]](https://www.microsoft.com/en-us/research/uploads/prod/2016/12/The-Byzantine-Generals-Problem.pdf)
+or messengers might be captured (=timeout).
+<br>
+The generals must follow an algorithm, so that
+loyal generals decide upon the same plan (=block),
+and a small number of generals (=byzantine nodes)
+cannot cause the loyal generals to follow a malicious plan (=propose false block).
+<br>
+In order to achieve this, 
+communication has to be such that
+all loyal generals vote on the same plan (=ensure that exact block is communicated in current round).
+Then, majority voting is used to determine if the plan should be followed (=consensus process).
+<br>
+The generals take into consideration all votes
+that are communicated to them within a given timeframe (=timeouts in algorithm) 
+and count all others as votes against the plan.
+<br>
+Using signed messages (=public key cryptography),
+the generals can ensure the authenticity of the message
+(=algorithm allows for easy verification).
+<br>
+A distributed system can be considered byzantine fault tolerant,
+if it continues to produce correct results, 
+even if 1/3 of all participating subsystems 
+are fraudulent or misbehaving in any other way 
+(e.g. being broken, failing to connect, ...).
+<br>
+BFT algorithms are especially suited to distributed networks
+as they are agnostic of the type of errors that can occur.
+It only is concerned with the answer that it does get,
+and does not depend on getting an answer from every network participant.
+<br>
+BFT allows an arbitrary amount of failures over the lifetime of the system
+as long as not more than 1/3 of the voting power fails at once
+[[LamShoPea16]](https://www.microsoft.com/en-us/research/uploads/prod/2016/12/The-Byzantine-Generals-Problem.pdf)
+[[CasLis02]](https://pmg.csail.mit.edu/papers/bft-tocs.pdf).
+
+BFT is robust to *denial of service* attacks in the way, 
+that the nodes endure not producing correct results during the attack
+but resume reaching consensus once the attack ends. 
+This is a useful quality as denial of service attacks are much more common
+than actually hacking a network node.
 
 ## Tendermint Consensus Process
 
@@ -215,12 +290,12 @@ The consensus is organized into voting rounds,
 where for each round a new validator is chosen from the validator set
 to propose a new block.
 This is handled by a deterministic function (not at random),
-which selects validators in a pattern relating to their bonded assets.
+which selects validators in a pattern relating to their bonded assets
 [[p.6 Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
 
 A single round consists of at least three and at most 5 steps: <br>
 *Propose*, *prevote* and *precommit* happen in every round, 
-whereas *commit* and *new height* only occur if consensus on a block was reached.
+whereas *commit* and *new height* only occur if consensus on a block was reached
 [[p.5 Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
 
 In the first round at a new block height 
@@ -251,7 +326,7 @@ the CommitTime is written to the block header
 and the *NewHeight* step is invoked. <br>
 After commiting, a certain period of time is waited,
 to include commit signings from slower validators. 
-Then, the next block is proposed.<br>
+Then, the next block is proposed
 [[p.1, 4, 7f. BucKwoMil18]](https://arxiv.org/abs/1807.04938)
 [[p.4, 6-8 Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
 
@@ -274,19 +349,6 @@ the commit stage is entered
 
 ### Notes on consensus mechanism
 
-- Tendermint introduced a new termination mechanism,
-to prevent endless rounds and locked nodes from blocking
-[[p.5, BucKwoMil18]](https://arxiv.org/abs/1807.04938):
-
-  - For each step in a round (proposal, pre-vote, pre-commit)
-  there are defined timeouts, 
-  after which `nil` is returned,
-  if there was no decision.
-
-  - Before the global stabililization time (GST),
-  the timeouts are increased after each round, 
-  if a sufficient value was not found before.
-
 - Also, unlike in predecessor algorithms (PBFT, DLS),
 does not include actual messages, 
 when voting,
@@ -297,11 +359,6 @@ but rather cryptographic proof of the message contents
 meaning that the same rounds are completed,
 whether or not a valid block is proposed
 and sufficient votes are collected
-[[p.3, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
-
-- All communication is done within a specified time $\Delta t$
-after a message is sent. Final time is $t_{end} = \max\{t_{message}, GST\} + \Delta t$,
-where $GST$ is the Global Stabilization Time.
 [[p.3, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
 
 - Through use of cryptographic signatures,
@@ -378,11 +435,11 @@ who try to claim a bigger share of the fees
 by removing a certain amount of signatures:
 [[p.9 Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
 
-Expected benefit:
-$\sum Fees * v_a * v_p * v_p$
+  - Expected benefit:
+  $\sum Fees * v_a * v_p * v_p$
 
-Expected detriment:
-$\sum Fees * v_a * v_p$
+  - Expected detriment:
+  $\sum Fees * v_a * v_p$
 
 Because $v_i < 1$, the benefit will always be smaller than the detriment.
 
@@ -391,56 +448,27 @@ Because $v_i < 1$, the benefit will always be smaller than the detriment.
 https://docs.tendermint.com/master/introduction/what-is-tendermint.html <br>
 https://github.com/tendermint/tendermint/tree/master/spec/abci/
 
-
-- Interface to feed input from software 
+The Application Blockchain Interface (ABCI) is the interface
+to feed input from an abitrary state machine
 written in any language 
-to the Tendermint Core consensus engine.
-
-- The implementation in Tendermint (Tendermint Socket Protocol (TSP))
-satisfies this interface.
-
-- Tendermint Core implements three socket connections 
-between ABCI and applications
-for the following purposes:
-  
-  - Validation of transactions, that are added to the mempool
-
-  - Running block proposals in the consensus engine
-
-  - Querying the application state
-
-- Contains methods, 
-which offer corresponding `Request` and `Response` message types 
-in order to interact with the interface. 
-
-- All messages and methods are defined in protocol buffers, 
+to the Tendermint SMR engine. 
+Its implementation in Tendermint is called the Tendermint Socket Protocol (TSP).<br>
+All actions on the actual data stored in the blockchain
+go through the ABCI.
+For this purpose, the interface exposes methods 
+for querying, updating and adding new data.
+The ABCI messages and methods are defined in [protocol buffers](https://en.wikipedia.org/wiki/Protocol_Buffers), 
 which makes the interface agnostic to the programming language of the application, 
-with which it communicates.
+with which it communicates [[Docs]](https://docs.tendermint.com/master/spec/abci/).
 
+### Implementation details
 
-## Implementation details
-
-https://docs.tendermint.com/master/tutorials/go-built-in.html <br>
-https://github.com/tendermint/tendermint/blob/95cf253b6df623066ff7cd4074a94e7a3f147c7a/spec/abci/abci.md <br>
-https://docs.tendermint.com/master/assets/img/abci.3542de28.png
-
-
-- Several methods are defined for a key-value store application
-
-  - `Info`
-  - `DeliverTx`
-  - `CheckTx`
-  - `Commit`
-  - `Query`
-  - `InitChain`
-  - `BeginBlock`
-  - `EndBlock`
-  - `ListSnapshots`
-  - `OfferSnapshot`
-  - `LoadSnapshotChunk`
-  - `ApplySnapshotChunk`
-
-The ABCI comprises three primary types of socket connections:
+Depending on the implementation,
+these are called directly within Go code or by
+by sending a `Request*` message to the ABCI via socket or gRPC.
+In return, the ABCI sends a `Response*` message. <br>
+The ABCI comprises three primary types of socket connections 
+[[ABCI Docs]](https://docs.tendermint.com/master/spec/abci/abci.html):
 
 1. Mempool connection: `CheckTx` <br>
 Responsible for validating new transactions 
@@ -476,7 +504,10 @@ if a given key exists
 and if it does,
 what its stored value is.
 
-Additionally, `Flush` is a method, 
+Additionally, the following special methods exist:
+
+4. Additional methods: `Flush`, `Echo`, `ListSnapshots`, `OfferSnapshots`, `LoadSnapshotChunk`, `ApplySnapshotChunk` <br>
+`Flush` is a method, 
 which is called on every connection, 
 and `Echo` serves debugging purposes. 
 The different `Snapshot` methods
@@ -485,14 +516,161 @@ to get up to date with the blockchain state.
 This has the advantage,
 that not every node has to recompute all previous state changes.
 
-## Application Architecture
+https://docs.tendermint.com/master/tutorials/go-built-in.html <br>
+https://docs.tendermint.com/master/assets/img/abci.3542de28.png
 
-https://docs.tendermint.com/master/app-dev/app-architecture.html
+## ABCI++
+
+ABCI++ is the further development of the 
+Application Blockchain Interface.
+
+### Motivation for ABCI++
+
+With ABCI, the application layer has no control over the proposed blocks
+and the transactions contained in them. This means, that 
+transactions, that are in itself well formed, but 
+are in fact garbage transactions or otherwise invalid,
+are included in proposed blocks and 
+then executed in the replicated chain state.<br>
+The mechanism also is not robust against byzantine block proposers,
+who e.g. flood the network with garbage transactions.
+Finally, mempool front-running is not handled well.
+<br>
+From the API point of view, the separated design to finalize a block
+using `BeginBlock`, `EndBlock` and sequentially executing `DeliverTx` for every transaction in the block
+limits the possibilities of concurrent execution,
+as only one ABCI process can be active at a time.
+[[Men22]](https://www.youtube.com/watch?v=cAR57hZaJtM)
+
+### Implementation
+
+There are four types of connections to the ABCI
+[[Wai21]](https://www.youtube.com/watch?v=UuDrSpo_Q-I&t=618s):
+
+- Consensus: `BeginBlock`, `DeliverTx`, `EndBlock`, `Commit`
+- Mempool: `CheckTx`
+- StateSync: `ListSnapshots`, `OfferSnapshot`, `LoadSnapshotChunk`, `ApplySnapshotChunk`
+- Info: `Info`, `Query`, `InitChain`
+
+The changes in ABCI++ mainly addressed the consensus engine.
+It is designed to open up possibilities and add more control
+for developers.
+<br>
+Some of the addressed downsides of the old ABCI are:
+- No filtering of bad transactions
+- No room for concurrency (each transaction is executed sequentially)
+- Less overall application control (app had no control over consensus)
+
+On top of that, ABCI++ enables developers to choose 
+between having delayed or immediate agreement
+in their blockchains.
+<br>
+With ABCI++ there are now more possibilities
+to interact with the application layer
+at multiple points in the consensus process
+[[Wai21]](https://www.youtube.com/watch?v=UuDrSpo_Q-I&t=618s)
+[[Men22]](https://www.youtube.com/watch?v=cAR57hZaJtM)
+[[Ojh21]](https://www.youtube.com/watch?v=jHcI3jFgp_E):
+
+*Preparing the proposal*<br>
+Tendermint grabs the transactions from the mempool
+and communicates them to the network. 
+In ABCI++ it is now possible to prioritize transactions in the mempool.
+Additionaly, the application layer can 
+add own transactions,
+remove transactions (invalid or garbage/spam tx),
+merge transactions (batching),
+reorder transactions.
+<br>
+With the new support for immediate agreement,
+the block contents can be executed and
+the app hash for the proposed block 
+can be already returned and added in the current block,
+as opposed to in the following block as for the
+previously only way (delayed agreement).
+
+*Processing the proposal*<br>
+The proposed block is gossiped to the network.
+All nodes validate the proposal and vote nil 
+if they cannot validate the proposed block.
+In ABCI++ it is now possible for the application layer
+to have implemented logic, 
+that can evaluate if a proposed block should be accepted or not.
+Because checking the validity of a block 
+is extended to the application layer,
+it is called *external validity*.
+This specifically allows to filter byzantine block proposals.
+<br>
+The block contents can be executed *immediately*
+upon processing a proposal,
+similar to `PrepareProposal`.
+
+*Extending votes*<br>
+Happens in the precommits only.
+The applications can now allow validators 
+to add transactions to the block
+which is signed with the submitting validators private key.
+This can be useful for price oracles to gather more accurate data.
+
+*Finalizing the block*<br>
+Instead of separating the function calls 
+(`BeginBlock`, `DeliverTx`, `EndBlock`, `Commit`)
+and defining a very specific interface,
+the ABCI++ now allows the developers
+to handle the block in its entirety.
+This gives more freedom in 
+executing the contained transactions, 
+especially concerning concurrent execution.
+<br>
+With immediate agreement, the block contents were already executed.
+There is only an approval of the execution happening in that case.
+
+*ABCI concurrency*<br>
+Previously, calls to the ABCI could only be handled in a serialized way.
+For example, if a `CheckTx` is running, 
+no other operation can be executed.
+ABCI++ now allows for concurrent method calls.
+
+### Points of Caution
+
+With the newly gained freedom for developers
+to precisely adjust the consensus behaviour 
+for their specific application needs
+also come sensitive points to keep in mind.
+
+Because the application layer now can 
+implement additional logic 
+which a proposed block has to fulfill,
+there are now block proposals,
+which are rejected,
+that were previously accepted.
+This affects liveness 
+and should be considered 
+by any developer who makes use of the mechanisms.
+
+Because of these changes,
+Tendermint poses some requirements on the application layer.
+The application has to guarantuee 
+
+- *determinism*<br>
+(i.e. when `ProcessProposal` accepts a block on one correct machine,
+it accepts it on all correct machines)
+- *coherence*<br>
+(i.e. when the same exact data is processed on two processors,
+both machines come to the same decision)
+
+### Outlook
+
+In the future, the `Commit` method is going to be 
+included in `FinalizeBlock` as well. 
+
+
+## Application Architecture
 
 The basic signal flow 
 when using a blockchain application, 
 that is built with Tendermint,
-is described here:
+is described here [[App Arch. Docs]](https://docs.tendermint.com/master/app-dev/app-architecture.html):
 
 - End-user communicates with application
 to create a transaction
@@ -511,15 +689,17 @@ to the ABCI
 the actual update of the chain state
 or querying the desired information.
 
+![App Architecture](./images/app_architecture.jpg)
+
 
 ## Meaning of Tendermint for Cosmos SDK?
 
-From https://github.com/tendermint/tendermint/blob/master/spec/abci/abci.md#Determinism:
+From :
 
 "[...] it is recommended that applications not be exposed to any external user or process except via the ABCI connections to a consensus engine like Tendermint Core. The application must only change its state based on input from block execution (BeginBlock, DeliverTx, EndBlock, Commit), and not through any other kind of request. This is the only way to ensure all nodes see the same transactions and compute the same results."
 
 --> this states, that in order to guarantee 
-the expected/desired deterministic behaviour 
+the expected/desired deterministic behavior 
 on all participating machines,
 it is mandatory
 to only update the chain state 
@@ -527,6 +707,7 @@ using the ABCI,
 which is encapsuled by Tendermint Core.
 No direct requests to the application layer
 should be able to change state variables.
+[[Determinism Docs]](https://github.com/tendermint/tendermint/blob/master/spec/abci/abci.md#Determinism).
 
 This is supported by [[p.4, BucKwoMil18]](https://arxiv.org/abs/1807.04938),
 where it is stated,
@@ -548,6 +729,11 @@ Partially synchronous systems can present hybrid forms of these two extremes,
 where certain constraints are defined 
 and freedom is given on the other side.<br>
 
+It was shown by research, that
+fully ansynchronous systems cannot reliably achieve consensus.
+Hence, some limitations have to set
+[CasLis02](https://www.microsoft.com/en-us/research/wp-content/uploads/2017/01/p398-castro-bft-tocs.pdf).
+
 The consensus algorithm in Tendermint 
 can be considered **weakly** or **partially synchronous**,
 because it assumes, that there is an upper bound $\Delta$,
@@ -556,20 +742,19 @@ This describes the real-world phenomenon,
 that previously unknown latency will be present in the system,
 but that this latency will not be endless,
 if the network participants are not offline. <br>
-This is implemented by means of several timeout values,
+This means, that all communication is done at time $t_{end} = \max\{t_{msg}, GST\} + \Delta $,
+where $GST$ is the Global Stabilization Time.
+[[p.3, BucKwoMil18]](https://arxiv.org/abs/1807.04938)
+[[p.1-3, DwoLynSto88]](https://arxiv.org/abs/1807.04938).
+<br>
+This is implemented by means of several `timeout` values,
 after which a `nil` message is signed,
-if the node has not responded yet
+if the node has not responded yet.
+Before the global stabililization time (GST),
+the timeouts are increased after each round, 
+if a sufficient value was not found before,
+so that eventually, consensus will be reached
 [[p.5, Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
-
-FLP impossiblility describes the characteristic, that
-out of the three properties safety, liveness and fault tolerance,
-only two can be achieved. 
-In globally distributed systems, like blockchains,
-where communication can fail
-and network participants do not necessarily trust each other,
-fault tolerance **must** be given. <br>
-This means, that blockchain algorithms can choose between implementing
-safety or liveness.
 
 - If validators are offline, lagging, etc. 
 they can be skipped in Tendermint.
@@ -578,6 +763,70 @@ to receive a proposal block from the proposing validator
 before jumping to the next voting round
 and abandoning the currently proposed block.
 
+
+## Safety and Liveness - FLP impossiblility
+
+In distributed systems like blockchains, 
+the participant nodes must execute the correct instructions
+to secure the correct behaviour of the system.
+To do this, all nodes must reach consensus 
+at a given decision round (=block height in blockchains).
+*Safety* describes the property,
+that if consensus is reached
+all nodes produce the exact same block at the same height
+(="a bad thing never happens"). <br>
+To guarantee, that consensus is always reached
+and chain execution never halts,
+is favoring *liveness* of the system 
+(="a good thing will eventually happen"). <br>
+When a distributed system is *fault tolerant*,
+it can deal with one or more faulty network participants
+and still produce correct results through consensus
+[[Kim18]](https://medium.com/codechain/safety-and-liveness-blockchain-in-the-point-of-view-of-flp-impossibility-182e33927ce6)
+[[p.3, DwoLynSto88]](https://arxiv.org/abs/1807.04938).
+
+FLP impossiblility describes the characteristic, that
+out of the three properties *safety*, *liveness* and *fault tolerance*,
+only two can be guaranteed. 
+In globally distributed systems, like blockchains,
+where communication can fail
+and network participants do not necessarily trust each other,
+fault tolerance **must** be given. <br>
+This means, that blockchain algorithms can choose between implementing
+safety or liveness.
+
+In Nakamoto consensus (e.g. Bitcoin),
+the liveness is guaranteed over safety.
+It is possible, that forks of the chain can exist,
+which means, that different blocks have been created at the same height,
+but a longest chain (i.e. the one with the most work) will form
+and thus, consensus will be reached (="something good will eventually happen").
+Even when faulty blocks are produced, then chain will not halt.
+
+In BFT algorithms (e.g. Tendermint) on the other hand,
+a block cannot be produced if consensus is not reached,
+since a 2/3 majority vote is necessary.
+Hence, if consensus is not reached in multiple rounds,
+the throughput is reduced
+and the chain might eventually come to a halt.
+This means, that safety is preferred over liveness
+[[Kim18]](https://medium.com/codechain/safety-and-liveness-blockchain-in-the-point-of-view-of-flp-impossibility-182e33927ce6).
+
+**Hybrid algorithms**
+
+Alternate algorithms have been proposed,
+like *Hot-Stuff*, where socalled *commit-certificates* can be contained in the blocks.
+Even blocks without these can be produced, they are just not final in the blockchain
+until further requirements are met. This partly sacrifices safety for liveness.
+
+*Casper the Friendly Finality Gadget* is a derivation of PoS principles to a PoW blockchain.
+On top of the liveness favoring PoW chain, 
+voting rounds are introduced at every 50 blocks 
+to preserve safety at those points.
+
+## Finality
+
+TODO: Add finality info
 
 ## Random things
 
@@ -592,7 +841,7 @@ to work towards the "good" for the blockchain
 is not the economic sacrifice 
 in terms of computing power
 but rather the staked assets, 
-which can be slashed for undesired behaviour 
+which can be slashed for undesired behavior 
 [[ByiKwoBuc16]](https://open.spotify.com/episode/6eSJAtWT9btfca4mwYO7KT).
 
 In Nakamoto consensus anybody can put up the work to be the next block proposer,
@@ -602,7 +851,6 @@ PoS only allows a selection of validators to propose a block.
 This can therefore be classified as *non-censorship-resistant*
 [[ByiKwoBuc16]](https://open.spotify.com/episode/6eSJAtWT9btfca4mwYO7KT).
 
-
 Technically, one does not need to have a large amount of Bitcoin
 in order to attack the blockchain. 
 One just needs sufficient resources to build the longest chain (51% attack). <br>
@@ -611,7 +859,7 @@ the attacker has to be in control of at least 33% of the staked assets
 of the current validator set. <br>
 New validator sets are only selected after a specified amount of time (*epoch*),
 which means, that an attacker cannot immediately gain control of the necessary assets, 
-without some time passing, where the suspicious behaviour could be noticed
+without some time passing, where the suspicious behavior could be noticed
 [[ByiKwoBuc16]](https://open.spotify.com/episode/6eSJAtWT9btfca4mwYO7KT).
 
 The process of voting 
@@ -621,11 +869,15 @@ as opposed to "failure detection and retry"-systems,
 which would take additional computing time if a failure or wrong information occurs on one of the machines.
 [[Sch90]](https://link.springer.com/chapter/10.1007/BFb0042323).
 
-- Consensus is the central principle 
+Consensus is the central principle 
 through which it is guaranteed,
 that all participating subsystems in a distributed system
 receive the exact same information/transactions 
 in the same order [[p.1, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
+
+Through the use of public key cryptography,
+it is not possible for a malicious node to impersonate another, healthy node
+[[LamShoPea16]](https://www.microsoft.com/en-us/research/uploads/prod/2016/12/The-Byzantine-Generals-Problem.pdf).
 
 ### Block structure
 
