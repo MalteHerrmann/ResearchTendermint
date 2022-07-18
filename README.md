@@ -55,7 +55,7 @@ as a means to improve tracking text changes with Git.
 https://docs.tendermint.com/master/ <br>
 https://docs.tendermint.com/master/introduction/what-is-tendermint.html
 
-In any PoS blockchain application
+In any blockchain application
 three main layers of concern have to be addressed:
 
 - Networking (P2P communication)
@@ -174,18 +174,17 @@ a small amount of connected machines,
 that were often in the same network,
 and all participants could be trusted. <br>
 Blockchains on the other hand are networks 
-of hundreds or thounsands of nodes,
+of hundreds or thousands of nodes,
 which can be in arbitrary locations
 and the participants do not know each other.
 Additionally, nodes are usually only
 connected to their peers, 
 which is a subset of the total system. 
 These peers communicate through a gossip protocol
-[[p.1, BucKwoMil18]](https://arxiv.org/abs/1807.04938). 
 <br>
 Tendermint introduced a new termination mechanism,
 to prevent endless rounds and nodes from blocking
-[[p.5, BucKwoMil18]](https://arxiv.org/abs/1807.04938):
+[[BucKwoMil18]](https://arxiv.org/abs/1807.04938).
 
 
 ### Possible exploits
@@ -230,8 +229,9 @@ In this case, no blocks can be produced
 and the attackers can control the reduction of throughput of the blockchain
 or bring it to a halt altogether.
 
-If malicious behavior in form of double-voting 
-or light client attacks is suspected by a node
+If malicious behavior,
+e.g. in form of double-voting attacks, 
+is suspected by a node
 an `Evidence` message can be sent
 to notify the network of this behavior. 
 It is up to the application layer to evaluate the evidence
@@ -358,7 +358,7 @@ Then, the next block is proposed
 [[Consensus Docs]](https://docs.tendermint.com/master/spec/consensus/consensus.html).
 
 When a round terminates without consensus on a new block,
-i.e. less than 2/3 majority has casted a commit vote,
+i.e. less than 2/3 majority has casted a precommit vote,
 a new round starts.
 In order to achieve consensus when timeouts are the cause of non-consensus,
 the timeout values are increased with each starting round.
