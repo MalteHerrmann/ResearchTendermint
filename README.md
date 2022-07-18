@@ -33,6 +33,7 @@ as a means to improve tracking text changes with Git.
 - [Meaning of Tendermint for Cosmos](#meaning-of-tendermint-for-cosmos-sdk)
 - [Synchrony, Asynchrony, Partial Synchrony](#synchrony-asynchrony-partial-synchrony)
 - [Safety and Liveness - FLP impossibility](#safety-and-liveness---flp-impossiblility)
+  - [Casper](#casper)
 - [Finality](#finality)
 - [Random Things](#random-things)
   - [Block Structure](#block-structure)
@@ -105,6 +106,10 @@ Deterministic means, that the same result is always achieved
 when given the same initial conditions 
 and the same requests
 between states.
+Sources of non-determinism can be arbitrary:
+hardware failures, node-dependent state (e.g. time or random numbers),
+race conditions, floating-point numbers, map iteration in Golang, ...
+[[ABCI++ docs]](https://docs.tendermint.com/master/spec/abci++/abci++_basic_concepts.html)
 [[She11]](https://blog.markshead.com/869/state-machines-computer-science/).
 
 *State machine replication*: <br>
@@ -186,7 +191,15 @@ to prevent endless rounds and nodes from blocking
 ### Possible exploits
 
 *Nothing at stake problem*: <br>
-Network participants do not face a high enough incentive to not act maliciously
+When network participants do not face a high enough incentive 
+to not act maliciously,
+it is the best strategy for validators
+to accept all forks
+to ensure they receive block rewards
+from whichever chain is the correct one.
+This could mean a malicious fork could win over
+the network
+[[Oba22]](https://medium.com/minima-global/finality-in-blockchain-e5a62ca0f9f4)
 [[p.1, Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
 
 *Long range double-spending attacks*: <br>
@@ -210,11 +223,22 @@ By adjusting the bonding requirements to become a validator,
 the probability for these kinds of attacks can be adjusted
 [[p.4, Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
 
+*Censorship attacks*: <br>
+The liveness of the blockchain can be compromised
+if +1/3 of the voting power decides to withhold any precommit votes.
+In this case, no blocks can be produced
+and the attackers can control the reduction of throughput of the blockchain
+or bring it to a halt altogether.
+
 If malicious behavior in form of double-voting 
-or  is suspected by a node
-a `Evidence` message can be sent
-to notify the network of this behavior
-[[ABCI Docs]](https://docs.tendermint.com/master/spec/abci/abci.html) [[Evidence Docs]](https://docs.tendermint.com/master/spec/consensus/evidence.html).
+or light client attacks is suspected by a node
+an `Evidence` message can be sent
+to notify the network of this behavior. 
+It is up to the application layer to evaluate the evidence
+and punish the actors
+[[ABCI Docs]](https://docs.tendermint.com/master/spec/abci/abci.html) 
+[[ABCI++ docs]](https://docs.tendermint.com/master/spec/abci++/abci++_basic_concepts.html)
+[[Evidence Docs]](https://docs.tendermint.com/master/spec/consensus/evidence.html).
 
 ## Predecessors of Tendermint Consensus
 
@@ -311,24 +335,27 @@ or no proposal has reached the node,
 `nil` is sent as the prevote value. <br>
 When a node receives a block proposal and $2f+1$ prevote messages containing $id(v)$,
 it sends a *precommit* message with $id(v)$. 
-Again, in any other case (the node deems the block invalid, 
-$2f+1$ prevotes not received,
-or precommit timeout is expired), 
+Again, in the case that
+$2f+1$ prevotes are not received 
+before the precommit timeout is expired, 
 a precommit message containing `nil` is sent. 
 If a node receives a block proposal as well as $2f+1$ precommit messages,
 it decides, that this block will be committed
 and signs a *commit* message. 
 If the node has not received the actual block during the previous steps,
 it is supplied with it during the *commit* step. 
+The contained transactions are executed in a *subjective commit*.
 All commit messages are broadcasted to the network.
-When a node receives a 2/3 majority of commits for a specific block,
-the CommitTime is written to the block header
-and the *NewHeight* step is invoked. <br>
 After commiting, a certain period of time is waited,
 to include commit signings from slower validators. 
+When a node receives notice, that a 2/3 majority of validators
+will commit this specific block,
+the CommitTime is written to the block header
+and the *NewHeight* step is invoked in order to run the *canonical commit*. <br>
 Then, the next block is proposed
 [[p.1, 4, 7f. BucKwoMil18]](https://arxiv.org/abs/1807.04938)
-[[p.4, 6-8 Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
+[[p.4, 6-8 Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e)
+[[Consensus Docs]](https://docs.tendermint.com/master/spec/consensus/consensus.html).
 
 When a round terminates without consensus on a new block,
 i.e. less than 2/3 majority has casted a commit vote,
@@ -345,7 +372,14 @@ the commit stage is entered
 
 <div align="center"> <img src="./images/consensus_logic.png" alt="Consensus Logic" width="600"/> </div>
 
-- TODO: Locking erläutern
+Tendermint also implements locking rules, so that 
+validators do not commit different blocks at the same block height.
+The validator is locked to the block 
+when pre-commiting a block.
+It must pre-vote the block
+and can only unlock
+if there is a polka for another block in a later round.
+
 
 ### Notes on consensus mechanism
 
@@ -388,8 +422,6 @@ if not more than 1/3 of nodes are misbehaving
 if >1/3 of validators try to double sign.
 [[p.4 Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
 
-- TODO: Mempool noch erläutern
-
 - Messages with invalid signatures
 are removed before entering the mempool 
 [[p.4, BucKwoMil18]](https://arxiv.org/abs/1807.04938).
@@ -405,17 +437,6 @@ in order to pass the proposed block on to the next stage
 
 - "Polka" = more than 2/3 of the validator set pre-vote for the same block
 
-- Locking rules, so that 
-validators do not commit different blocks at the same block height.
-The validator is locked to the block 
-when pre-commiting a block.
-It must pre-vote the block
-and can only unlock
-if there is a polka for that block.
-
-- TODO: hier noch mehr Infos sammeln -> in
-[[p.7 Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
-
 - In PoS applications (like all Cosmos based blockchains), 
 2/3 of voting power 
 and not 2/3 of actual validators 
@@ -426,9 +447,6 @@ the validators can be forced
 to bond the chain currency in a security deposit
 which will be slashed when misbehaving
 with regards to the consensus protocol.
-
-- TODO: Explain Proof of Safety and Proof of Liveness from 
-[[p.8 Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
 
 - The Tendermint PoS algorithm does not benefit those,
 who try to claim a bigger share of the fees
@@ -470,7 +488,8 @@ In return, the ABCI sends a `Response*` message. <br>
 The ABCI comprises three primary types of socket connections 
 [[ABCI Docs]](https://docs.tendermint.com/master/spec/abci/abci.html):
 
-1. Mempool connection: `CheckTx` <br>
+1. *Mempool connection* <br>
+`CheckTx` <br>
 Responsible for validating new transactions 
 before being shared 
 or included in a block. <br>
@@ -478,7 +497,8 @@ Called whenever a transaction is added to Tendermint Core <br>
 Checks if the transaction is valid 
 (wrong nonce, request format, signatures, ...).
 
-2. Consensus connections: `InitChain`, `BeginBlock` -> [`DeliverTx`] -> `EndBlock` -> `Commit` <br>
+2. *Consensus connections* <br>
+`InitChain`, `BeginBlock` -> [`DeliverTx`] -> `EndBlock` -> `Commit` <br>
 Responsible for block execution. <br>
 Upon starting a new blockchain, `InitChain` is called.
 When a new block is decided on,
@@ -497,8 +517,9 @@ The header of the next committed block
 contains cryptographic traces of the execution
 of `DeliverTx`, `EndBlock`, and `Commit`.
 
-3. Info connections: `Info`, `SetOption`, `Query` <br>
-Responsible for user queries and initialization <br>
+3. *Info connections* <br>
+`Info`, `SetOption`, `Query` <br>
+Responsible for user queries and initialization. <br>
 Called in order to know
 if a given key exists
 and if it does,
@@ -506,7 +527,7 @@ what its stored value is.
 
 Additionally, the following special methods exist:
 
-4. Additional methods: `Flush`, `Echo`, `ListSnapshots`, `OfferSnapshots`, `LoadSnapshotChunk`, `ApplySnapshotChunk` <br>
+4. `Flush`, `Echo`, `ListSnapshots`, `OfferSnapshots`, `LoadSnapshotChunk`, `ApplySnapshotChunk` <br>
 `Flush` is a method, 
 which is called on every connection, 
 and `Echo` serves debugging purposes. 
@@ -522,7 +543,10 @@ https://docs.tendermint.com/master/assets/img/abci.3542de28.png
 ## ABCI++
 
 ABCI++ is the further development of the 
-Application Blockchain Interface.
+Application Blockchain Interface, which
+addresses many limitations of the protocol,
+that have been witnessed in production,
+since the algorithm first was introduced.
 
 ### Motivation for ABCI++
 
@@ -542,17 +566,24 @@ limits the possibilities of concurrent execution,
 as only one ABCI process can be active at a time.
 [[Men22]](https://www.youtube.com/watch?v=cAR57hZaJtM)
 
+These proposed changes to the ABCI specification are aimed
+at improving scalability, 
+by enabling block proposers and validators to do more
+than just executing finalized transactions 
+in a serialized fashion.
+
 ### Implementation
 
-There are four types of connections to the ABCI
+As discussed before, in total there are 
+four types of connections to the ABCI
 [[Wai21]](https://www.youtube.com/watch?v=UuDrSpo_Q-I&t=618s):
 
 - Consensus: `BeginBlock`, `DeliverTx`, `EndBlock`, `Commit`
 - Mempool: `CheckTx`
-- StateSync: `ListSnapshots`, `OfferSnapshot`, `LoadSnapshotChunk`, `ApplySnapshotChunk`
 - Info: `Info`, `Query`, `InitChain`
+- StateSync: `ListSnapshots`, `OfferSnapshot`, `LoadSnapshotChunk`, `ApplySnapshotChunk`
 
-The changes in ABCI++ mainly addressed the consensus engine.
+The changes between ABCI and ABCI++ mainly addressed the consensus engine.
 It is designed to open up possibilities and add more control
 for developers.
 <br>
@@ -570,26 +601,37 @@ to interact with the application layer
 at multiple points in the consensus process
 [[Wai21]](https://www.youtube.com/watch?v=UuDrSpo_Q-I&t=618s)
 [[Men22]](https://www.youtube.com/watch?v=cAR57hZaJtM)
-[[Ojh21]](https://www.youtube.com/watch?v=jHcI3jFgp_E):
+[[Ojh21]](https://www.youtube.com/watch?v=jHcI3jFgp_E)
+[[ABCI++ docs]](https://docs.tendermint.com/master/spec/abci++/abci++_basic_concepts.html):
 
-*Preparing the proposal*<br>
+*Preparing the proposal* (`PrepareProposal`)<br>
 Tendermint grabs the transactions from the mempool
 and communicates them to the network. 
 In ABCI++ it is now possible to prioritize transactions in the mempool.
-Additionaly, the application layer can 
+Additionally, the application layer can 
 add own transactions,
 remove transactions (invalid or garbage/spam tx),
 merge transactions (batching),
 reorder transactions.
 <br>
-With the new support for immediate agreement,
+This is a key factor for improved performance.
+<br>
+With the new support for *immediate execution*,
 the block contents can be executed and
 the app hash for the proposed block 
 can be already returned and added in the current block,
 as opposed to in the following block as for the
-previously only way (delayed agreement).
+previously only way (delayed agreement). <br> 
+The changes to the application state 
+are only precomputed and stored until `FinalizeBlock`,
+instead of immediately updating the state 
+(because consensus on the changes was not reached yet).
+<br>
+When using *same-block execution*, 
+the `ResponsePrepareProposal` contains information 
+about the processed block.
 
-*Processing the proposal*<br>
+*Processing the proposal* (`PrepareProposal`)<br>
 The proposed block is gossiped to the network.
 All nodes validate the proposal and vote nil 
 if they cannot validate the proposed block.
@@ -603,16 +645,29 @@ This specifically allows to filter byzantine block proposals.
 <br>
 The block contents can be executed *immediately*
 upon processing a proposal,
-similar to `PrepareProposal`.
+similar to `PrepareProposal`
+and bad proposals can be rejected.
 
-*Extending votes*<br>
+*Extending votes* (`ExtendVote`, `VerifyVoteExtension`)<br>
 Happens in the precommits only.
 The applications can now allow validators 
-to add transactions to the block
-which is signed with the submitting validators private key.
-This can be useful for price oracles to gather more accurate data.
+to add data (e.g. transactions) to the block
+which is signed by the validator. 
+<br>
+When a node receives a message containing a vote plus a signed extension,
+it can check the extension with `VerifyVoteExtension` 
+in order to identify any bad behaviour.
+If an extension cannot be verified,
+it is indicative of a byzantine actor 
+and the whole message is rejected.
+<br>
+It is important to note, that 
+the data in the extensions is not agreed on by consensus (=not included in proposed block)
+but is available only on the current block height.
+<br>
+The vote extension can be useful for price oracles to gather more accurate data.
 
-*Finalizing the block*<br>
+*Finalizing the block* (`FinalizeBlock`)<br>
 Instead of separating the function calls 
 (`BeginBlock`, `DeliverTx`, `EndBlock`, `Commit`)
 and defining a very specific interface,
@@ -631,6 +686,30 @@ For example, if a `CheckTx` is running,
 no other operation can be executed.
 ABCI++ now allows for concurrent method calls.
 
+### Next-block execution vs. same-block execution
+
+With the introduction of `PrepareProposal` and `ProcessProposal`,
+the option of using *same-block execution* exists.
+This means, that the transactions are executed 
+already at block proposal,
+the block header is formed, 
+and the transactions results stored.
+In the traditional way, only *next-block execution* was possible,
+because the transactions were only executed at Commit and 
+its block hash and results 
+could only be included in the next block.
+In both cases, the application state
+is only updated once the block is committed.
+
+When using *same-block execution*, 
+the `ResponsePrepareProposal` contains information
+about the processed block, 
+like transaction results and header data.
+
+In the case of *next-block execution*,
+the `ResponsePrepareProposal` contains empty fields
+for the processed block information.
+
 ### Points of Caution
 
 With the newly gained freedom for developers
@@ -647,6 +726,12 @@ that were previously accepted.
 This affects liveness 
 and should be considered 
 by any developer who makes use of the mechanisms.
+<br>
+As a general rule, it is recommended, 
+that `ProcessProposal` and `VerfifyVoteExtension`
+should accept proposals even with invalid transactions as part of the block
+for the sake of liveness 
+and just ignore said transactions at block execution.
 
 Because of these changes,
 Tendermint poses some requirements on the application layer.
@@ -656,8 +741,32 @@ The application has to guarantuee
 (i.e. when `ProcessProposal` accepts a block on one correct machine,
 it accepts it on all correct machines)
 - *coherence*<br>
-(i.e. when the same exact data is processed on two processors,
+(i.e. when a block proposal is modified by one correct machine,
+the same exact data is processed on two processors,
 both machines come to the same decision)
+
+Concerning timing, it must be mentionend,
+that immediate execution requires more time for a block proposal to be done.
+It is possible, that timeouts are missed and 
+consensus cannot be reached [[ABCI++ Docs]](https://docs.tendermint.com/master/spec/abci++/abci++_basic_concepts.html).
+
+A developer must be careful in utilizing the options.
+For example, to ensure the integrity of a running blockchain,
+the use of *same-block* vs. *next-block* execution 
+must not be changed while live.
+Also, memory usage must be handled with case,
+as consensus might not be reached for a couple of rounds
+and the stored executed transactions in the proposed blocks
+will add up. 
+It might make sense to delete the execution results
+after a couple of failed rounds and 
+recalculate them when needed.
+<br>
+As a different example, it is now possible to 
+have concurrent calls to the ABCI++ methods.
+It is up to the application 
+to handle the concurrency of method calls.
+<br>
 
 ### Outlook
 
@@ -756,7 +865,7 @@ if a sufficient value was not found before,
 so that eventually, consensus will be reached
 [[p.5, Kwo14]](https://www.semanticscholar.org/paper/Tendermint-%3A-Consensus-without-Mining-Kwon/df62a45f50aac8890453b6991ea115e996c1646e).
 
-- If validators are offline, lagging, etc. 
+If validators are offline, lagging, etc. 
 they can be skipped in Tendermint.
 Any validator waits a certain, small amount of time
 to receive a proposal block from the proposing validator
@@ -811,6 +920,12 @@ the throughput is reduced
 and the chain might eventually come to a halt.
 This means, that safety is preferred over liveness
 [[Kim18]](https://medium.com/codechain/safety-and-liveness-blockchain-in-the-point-of-view-of-flp-impossibility-182e33927ce6).
+<br>
+This poses additional requirements on the validators, 
+which have to be able to be online 
+almost 100% of the time
+for distributed consensus 
+to timely be executed.
 
 **Hybrid algorithms**
 
@@ -818,15 +933,99 @@ Alternate algorithms have been proposed,
 like *Hot-Stuff*, where socalled *commit-certificates* can be contained in the blocks.
 Even blocks without these can be produced, they are just not final in the blockchain
 until further requirements are met. This partly sacrifices safety for liveness.
+<br>
+Also, there are two Casper implementations, that provide a 
+*chain-based* Proof of Stake.
+
+### Casper
+There are two implementations of PoS principles for the Ethereum stack:
+- Casper the Friendly Finality Gadget (CFFG)
+- Casper the Friendly GHOST (CTFG)
 
 *Casper the Friendly Finality Gadget* is a derivation of PoS principles to a PoW blockchain.
 On top of the liveness favoring PoW chain, 
 voting rounds are introduced at every 50 blocks 
 to preserve safety at those points.
+It also includes slashing of malicious actors' assets.
+Any long-range attacks on this chain are ignored,
+as no blocks older than the last safety point can be reverted.
+<br>
+The staking happens not in a form of a native staking coin
+but by depositing ETH in a smart contract.
+There is a validator set derived,
+which vote once per epoch (=50 blocks).
+In order for a block to be finalized, 
+two rounds of voting (as in Tendermint)
+have to be won.
+In the first round, the block is justified
+and the block of the previous epoch is finalized
+if it gets a 2/3 majority of the voting.
+The finalized block becomes the *Last Finalized Epoch* (LFE).
+This means, that a block is only finalized 
+up to 100 blocks after its creation.
+<br>
+*Casper the Friendly Ghost* is a 
+Proof of Stake adaptation of the GHOST protocol.
+*Greedy Heaviest Observed SubTree* describes an algorithm,
+where in case of a fork in the blockchain,
+the heaviest subtree instead of the longest chain
+is selected as the canonical representation of the chain state.
+Instead of voting on blocks proposed by a selected leader,
+the voting is based on the blocks,
+which the validators have observed.
+This implies, that validators will vote on the authenticity 
+of the heaviest subtree,
+that they have witnessed.
+This means, that the production of blocks is not dependent on consensus
+and the system guarantuees availability.
+
+The Casper implementations would allow for a much larger validator set
+than in Tendermint
+because consensus is not crucial to availability.
+In Tendermint consensus must be found quickly,
+so that the chain does not halt,
+which limits the amount of possible communication
+and thus validators.
+In Casper, out of the large set of validators
+a subset is elected every round. 
+If the validator set comes to agreement,
+it is randomized for the following round.
+When agreement is not met,
+the set is changed by $1/r$ where $r$ is the 
+unbonding duration for the staked assets.
+[[ICF17]](https://blog.cosmos.network/consensus-compare-casper-vs-tendermint-6df154ad56ae).
 
 ## Finality
 
-TODO: Add finality info
+A block is considered *final* if there is 
+a negligible probablity of it being revoked
+from the canonical chain. 
+<br>
+This is especially relevant in Proof of Work blockchains,
+where forks can happen because liveness is preferred over safety
+and transactions can land in blocks,
+that are eventually disregarded in the canonical longest chain.
+The deeper a block is in the chain,
+the less likely it is,
+that it is not on the longest chain.
+Hence, it is called *probabilistic finality*.
+
+In Tendermint, safety is preferred over liveness and
+blocks are only being created when consensus is reached. 
+If the blockchain is not compromised,
+the committed transactions in the blocks will not be revoked.
+This is considered *absolute finality*.
+<br>
+As Tendermint also allows for slashing 
+a byzantine validors' assets,
+it can be considered *economic finality*.
+
+This can be seen as equivalent to 
+paying something in cash, which is instantly final,
+versus paying with credit card,
+where it is trusted, that the transaction will go through
+and not be revoked [[Gau18]](https://medium.com/mechanism-labs/finality-in-blockchain-consensus-d1f83c120a9a).
+
 
 ## Random things
 
@@ -879,6 +1078,11 @@ Through the use of public key cryptography,
 it is not possible for a malicious node to impersonate another, healthy node
 [[LamShoPea16]](https://www.microsoft.com/en-us/research/uploads/prod/2016/12/The-Byzantine-Generals-Problem.pdf).
 
+As a means of future improvements,
+more advanced cryptography can be applied
+to further reduce the block size
+[[ICF17]](https://blog.cosmos.network/consensus-compare-casper-vs-tendermint-6df154ad56ae).
+
 ### Block structure
 
 <div align="center"> <img src="./images/block_structure.png" alt="Block Structure" width="400"/> </div>
@@ -900,7 +1104,6 @@ In turn, these are hashed together into the *block hash* of the new block.<br>
 These are [*Merkle tree root hashes*](https://en.wikipedia.org/wiki/Merkle_tree), 
 which contain cryptographic trails of all subitems, 
 that were hashed together.
-
 
 
 
