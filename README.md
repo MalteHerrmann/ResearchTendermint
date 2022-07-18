@@ -97,8 +97,8 @@ and changes these in response to the input
 
 *Finite state machines*: <br>
 A finite state machine cannot describe continuous state changes,
-but rather describes a finite amount of possible states
-(e.g. unlike water levels in a pool or very simply the length of a line).
+but rather describes a finite amount of possible states.
+There are discrete transitions between the states of the machine
 [[She11]](https://blog.markshead.com/869/state-machines-computer-science/).
 
 *Deterministic state machines*: <br>
